@@ -24,6 +24,77 @@ def parse_blast_output(blast_dir):
 
     return hit_dict
 
+class BlastResult:
+    def __init__(self, hits):
+        self.hits = hits
+        self.set_subject_ranges()
+        self.set_scov()
+        self.set_qcov()
+        self.set_length()
+        self.set_worst_eval()
+        self.set_smallest_ident()
+        print(self.subject_ranges)
+
+    def set_subject_ranges(self):
+        subject_starts = []
+        subject_ends = []
+        self.subject_ranges = []
+        for hit in self.hits:
+            subject_starts.append(hit.sstart)
+            subject_ends.append(hit.send)
+            self.subject_ranges.append((hit.sstart, hit.send))
+
+        self.subject_start = min(subject_starts)
+        self.subject_end = max(subject_ends)
+        self.subject_ranges.sort(key = lambda x: x[0])
+        self.filter_overlapping_ranges()
+
+    def filter_overlapping_ranges(self):
+        overlap = self.subject_ranges[0]
+        overlaps = []
+        counter = 0
+        for start, end in self.subject_ranges:
+            if counter > 1:
+                if overlap[1] >= start >= overlap[0]:
+                    overlap = (overlap[0], max(end, overlap[1]))
+                else:
+                    overlaps.append(overlap)
+                    overlap = (start, end)
+            else:
+                pass
+            counter += 1
+        overlaps.append(overlap)
+
+        self.subject_ranges = overlaps
+            
+    def set_scov(self):
+        scov = 0
+        for start, end in self.subject_ranges:
+            cover = end - start + 1
+            scov += cover
+
+        self.scov = 100 * scov / float(self.hits[0].slen)
+
+    def set_qcov(self):
+        self.qcov = self.hits[0].qcov
+    
+    def set_length(self):
+        self.length = self.subject_end - self.subject_start + 1
+
+    def set_smallest_ident(self):
+        identities = []
+        for hit in self.hits:
+            identities.append(hit.pident)
+
+        self.smallest_ident = min(identities)
+
+    def set_worst_eval(self):
+        evals = []
+        for hit in self.hits:
+            evals.append(hit.evalue)
+
+        self.worst_eval  = max(evals)
+
 class BlastHit:
 
     def __init__(self, line):
@@ -31,21 +102,24 @@ class BlastHit:
 
     def parse_line(self, line):
         self.qseqid, self.sseqid, self.pident, self.length,\
-                     self.mismatch, self.gapopen, self.qstart,\
-                     self.qend, self.sstart, self.send, self.evalue,\
-                     self.bitscore = line.split('\t')
+                     self.mismatch, self.qstart,\
+                     self.qend, self.qlen, self.sstart, self.send, \
+                     self.slen, self.evalue,\
+                     self.bitscore, self.qcov = line.split('\t')
 
         self.pident = float(self.pident)
         self.length = int(self.length)
         self.mismatch = int(self.mismatch)
-        self.gapopen = int(self.gapopen)
+        self.qlen = int(self.qlen)
         self.qstart = int(self.qstart)
         self.qend = int(self.qend)
         self.sstart = int(self.sstart)
         self.send = int(self.send)
+        self.slen = int(self.slen)
         self.evalue = float(self.evalue)
         self.bitscore = float(self.bitscore)
-        self.scover = self.length
+        self.qcov = float(self.qcov)
+        self.scov = self.length / float(self.slen)
 
 def parse_id_from_prot_file(prot_id):
     prot_id = prot_id.split('|')[0].strip()
